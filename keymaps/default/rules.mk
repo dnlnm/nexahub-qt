@@ -1,0 +1,19 @@
+ENCODER_ENABLE = yes
+ENCODER_MAP_ENABLE = yes
+VIA_ENABLE = yes
+VIAL_ENABLE = yes
+VIAL_INSECURE  = yes
+VIALRGB_ENABLE = no
+RGB_MATRIX_ENABLE = no
+RGB_MATRIX_DRIVER= ws2812
+WS2812_DRIVER = vendor
+BOOTMAGIC_ENABLE = yes
+QUANTUM_PAINTER_ENABLE = yes
+QUANTUM_PAINTER_DRIVERS += sh1106_i2c
+
+CONSOLE_ENABLE = yes
+RAW_ENABLE = yes
+SRC += font/proton_mono20.qff.c
+SRC += font/proton_mono12.qff.c
+SRC += font/proton_mono14.qff.c
+SRC += font/proton_mono9.qff.c

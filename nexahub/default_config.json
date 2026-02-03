@@ -1,0 +1,7 @@
+{
+    "auto_start": true,
+    "minimize_to_tray": true,
+    "default_layer": 0,
+    "oled_timeout": 30,
+    "layer_mappings": []
+}
