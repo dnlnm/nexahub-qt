@@ -21,6 +21,10 @@ class HIDManager:
     MATRIX_COLS = 4
     NUM_KEYS = 16  # Full 4x4 matrix
 
+    # Vial Protocol
+    VIA_CMD_VIAL_PREFIX = 0xFE
+    VIAL_CMD_GET_ENCODER = 0x03
+
     def __init__(self):
         self.device: Optional[hid.HidDevice] = None
         self.connected = False
@@ -302,3 +306,117 @@ class HIDManager:
                     keycodes.append(0)  # KC_NO
 
         return keycodes
+
+    def get_encoder_keycodes(self, layer: int, encoder_idx: int) -> Optional[tuple[int, int]]:
+        """Get encoder keycodes (CCW, CW) for a specific layer and encoder.
+
+        Args:
+            layer: Layer number
+            encoder_idx: Encoder index (0-based)
+
+        Returns:
+            Tuple of (ccw_keycode, cw_keycode) or None if failed
+        """
+        if not self.connected or not self.device:
+            return None
+
+        try:
+            # Build Vial report: [ReportID][VIA_Prefix][Vial_Cmd][Layer][EncoderIdx][padding...]
+            report = bytearray(64)
+            report[0] = 0x00
+            report[1] = self.VIA_CMD_VIAL_PREFIX
+            report[2] = self.VIAL_CMD_GET_ENCODER
+            report[3] = layer
+            report[4] = encoder_idx
+
+            with self._lock:
+                self._response_event.clear()
+                self._last_response = None
+                self.device.send_output_report(report)
+
+            # Wait for response
+            start_time = time.time()
+            timeout = 0.5
+            while time.time() - start_time < timeout:
+                remaining = timeout - (time.time() - start_time)
+                if remaining > 0 and self._response_event.wait(timeout=remaining):
+                    resp = self._last_response
+                    # Check for Vial prefix match matches
+                    if resp and len(resp) > 3:
+                         # Response format: [ReportID][CmdID][CCW_H][CCW_L][CW_H][CW_L]
+                         # But wait, Vial firmware writes response directly to msg buffer.
+                         # msg[0]... from vial_handle_cmd start at offset 0 of DATA (which is index 1 of report usually? or index 0 if raw?)
+                         # hidapi/pywinusb: input reports usually have Report ID at 0.
+                         #
+                         # vial.c:
+                         # case vial_get_encoder:
+                         #    msg[0] = ccw >> 8; msg[1] = ccw & 0xFF;
+                         #    msg[2] = cw >> 8;  msg[3] = cw & 0xFF;
+                         #
+                         # The `msg` passed to `vial_handle_cmd` is `data` from `raw_hid_receive`.
+                         # command_id is at data[0].
+                         # In `raw_hid_receive`:
+                         #   vial_handle_cmd(data, length);
+                         #   raw_hid_send(data, length);
+                         #
+                         # The `data` buffer includes the command bytes initially.
+                         # When `vial_handle_cmd` returns, `msg` (data) has been modified in place.
+                         #
+                         # If we send: [0x00, 0xFE, 0x03, Layer, Idx...]
+                         # The firmware receives `data` starting at 0xFE.
+                         # `msg[0]` is 0xFE. `msg[1]` is 0x03.
+                         #
+                         # Wait, `vial_handle_cmd` checks `msg[1]`.
+                         # `msg[0]` is `id_vial_prefix` (0xFE).
+                         #
+                         # Inside `vial_get_encoder`:
+                         # msg[0] = keycode >> 8 ...
+                         # msg[1] = ...
+                         #
+                         # So it OVERWRITES the 0xFE at the start of the buffer!
+                         #
+                         # So the response we get back will start with the CCW keycode high byte at index 0 (or index 1 if ReportID is included).
+                         
+                         # pywinusb usually returns raw data. If ReportID is 0, it might be stripped or present.
+                         # In `get_keymap_buffer`, we checked `resp[0] == 0xVIA_CMD`.
+                         #
+                         # If `vial_get_encoder` overwrites msg[0], then we can't identify the response by command ID easily!
+                         # This is a known issue/feature of Vial/QMK raw HID. It's half-duplex essentially.
+                         #
+                         # However, since we acquire a lock and clear `_response_event`, the first report we get *should* be the response.
+                         # But `_on_data_received` could pick up other events (like 0xFB layer changes).
+                         # We need to filter.
+                         #
+                         # Encoder response will NOT start with 0xFB or 0xFC or 0xFE (likely, unless keycode is huge).
+                         # But it *could* start with anything.
+                         #
+                         # Actually, in `vial_handle_cmd`:
+                         # `vial_get_keyboard_id` sets msg[0]..3 to version.
+                         # `vial_get_encoder` sets msg[0]..3 to keycodes.
+                         #
+                         # We have to assume if we sent a request, the next non-event packet is our response.
+                         # The events start with 0xFB.
+                         
+                         data_start = 1 if resp[0] == 0x00 else 0
+                         # If using 0x00 report ID, the first byte of actual data is at 1.
+                         
+                         if resp[data_start] == 0xFB: # Event packet
+                             self._response_event.clear()
+                             continue
+                             
+                         # Assume it's our response
+                         idx = data_start
+                         ccw = (resp[idx] << 8) | resp[idx+1]
+                         cw = (resp[idx+2] << 8) | resp[idx+3]
+                         return (ccw, cw)
+                    
+                    self._response_event.clear()
+                else:
+                    break
+                    
+            return None
+
+        except Exception as e:
+            print(f"Error getting encoder keycodes: {e}")
+            self.connected = False
+            return None

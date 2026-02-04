@@ -41,13 +41,13 @@ class KeymapGrid(QWidget):
 
     # Color coding for different keycode types
     COLORS = {
-        "layer": "#4A90D9",  # Blue - layer functions (TO, MO, etc.)
-        "basic": "#5CB85C",  # Green - basic keys
-        "mod": "#F0AD4E",  # Orange - modifiers
-        "special": "#D9534F",  # Red - special functions
-        "transparent": "#777777",  # Gray - KC_TRNS
-        "none": "#333333",  # Dark gray - KC_NO
-        "pressed": "#FFFFFF",  # White - pressed key highlight
+        "layer": "rgba(74, 144, 217, 160)",  # Blue - layer functions (TO, MO, etc.)
+        "basic": "rgba(92, 184, 92, 160)",   # Green - basic keys
+        "mod": "rgba(240, 173, 78, 160)",    # Orange - modifiers
+        "special": "rgba(217, 83, 79, 160)",  # Red - special functions
+        "transparent": "rgba(119, 119, 119, 140)", # Gray - KC_TRNS
+        "none": "rgba(51, 51, 51, 140)",      # Dark gray - KC_NO
+        "pressed": "rgba(255, 255, 255, 220)", # White - pressed key highlight
     }
 
     def __init__(self, parent=None):
@@ -70,27 +70,41 @@ class KeymapGrid(QWidget):
         grid.setSpacing(4)
         grid.setSizeConstraint(QGridLayout.SizeConstraint.SetFixedSize)
 
+        # Create encoder labels (CW/CCW) (Circle)
+        self.enc_ccw_label = QLabel("CCW")
+        self.enc_ccw_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.enc_ccw_label.setFont(QFont("Segoe UI", 7, QFont.Weight.Bold))
+        self.enc_ccw_label.setFixedSize(50, 50)  # Circle size
+        self.enc_ccw_label.setStyleSheet(self._get_label_style("#333333", is_circle=True))
+        grid.addWidget(self.enc_ccw_label, 0, 0, Qt.AlignmentFlag.AlignCenter)
+
+        self.enc_cw_label = QLabel("CW")
+        self.enc_cw_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.enc_cw_label.setFont(QFont("Segoe UI", 7, QFont.Weight.Bold))
+        self.enc_cw_label.setFixedSize(50, 50)  # Circle size
+        self.enc_cw_label.setStyleSheet(self._get_label_style("#333333", is_circle=True))
+        grid.addWidget(self.enc_cw_label, 0, 3, Qt.AlignmentFlag.AlignCenter)
+
         # Create labels for each key position
         for idx, (row, col) in enumerate(self.KEY_POSITIONS):
             label = QLabel("-")
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setFixedSize(60, 40)
             label.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-            label.setStyleSheet(self._get_label_style("#555555"))
+            label.setFixedSize(60, 40)
+            
+            # Knob is now square, same as others
+            label.setStyleSheet(self._get_label_style("#555555", is_circle=False))
 
             # Add to grid with proper positioning
-            if row == 0 and col == 0:
-                # First key in first row - center it across 4 columns if it was alone
-                # But since we have other keys in Row 0 now, let's keep it centered
-                # as if it were the only key (matching the physical look)
-                grid.addWidget(label, 0, 0, 1, 4, Qt.AlignmentFlag.AlignCenter)
+            if idx == 0:
+                # Knob button - center in middle columns
+                grid.addWidget(label, 0, 1, 1, 2, Qt.AlignmentFlag.AlignCenter)
+            elif idx in (1, 2, 3):
+                # Hidden keys - don't add to grid to prevent layout issues
+                label.hide()
             else:
                 # Other keys - normal positioning
                 grid.addWidget(label, row, col, Qt.AlignmentFlag.AlignCenter)
-
-            # Hide keys 1, 2, and 3 by default as requested
-            if idx in (1, 2, 3):
-                label.hide()
 
             self.key_labels.append(label)
 
@@ -99,22 +113,23 @@ class KeymapGrid(QWidget):
         # Set container style
         self.setStyleSheet("""
             KeymapGrid {
-                background-color: rgba(40, 40, 40, 220);
+                background-color: rgba(40, 40, 40, 160);
                 border-radius: 8px;
             }
         """)
 
     def _get_label_style(
-        self, bg_color: str, text_color: str = "#FFFFFF", pressed: bool = False
+        self, bg_color: str, text_color: str = "#FFFFFF", pressed: bool = False, is_circle: bool = False
     ) -> str:
         """Generate stylesheet for a key label."""
         border = "2px solid #FFFFFF" if pressed else "1px solid rgba(255, 255, 255, 30)"
+        border_radius = "25px" if is_circle else "4px"
         return f"""
             QLabel {{
                 background-color: {bg_color};
                 color: {text_color};
                 border: {border};
-                border-radius: 4px;
+                border-radius: {border_radius};
                 padding: 2px;
             }}
         """
@@ -196,7 +211,8 @@ class KeymapGrid(QWidget):
             key_row = idx // 4
             key_col = idx % 4
             is_pressed = (key_row, key_col) in self._pressed_keys
-            label.setStyleSheet(self._get_label_style(color, pressed=is_pressed))
+            # Knob is now square (is_circle=False)
+            label.setStyleSheet(self._get_label_style(color, pressed=is_pressed, is_circle=False))
 
         return True
 
@@ -226,7 +242,22 @@ class KeymapGrid(QWidget):
 
         # Get the original color for this key
         color = self._keycode_colors.get(key_idx, "#555555")
-        label.setStyleSheet(self._get_label_style(color, pressed=pressed))
+        # Knob is now square (is_circle=False)
+        label.setStyleSheet(self._get_label_style(color, pressed=pressed, is_circle=False))
+
+    def update_encoder(self, ccw_keycode: int, cw_keycode: int):
+        """Update encoder CCW/CW labels."""
+        # CCW
+        name = shorten_keycode_name(get_keycode_name(ccw_keycode), 8)
+        self.enc_ccw_label.setText(f"CCW\n{name}")
+        color = self._get_keycode_color(ccw_keycode)
+        self.enc_ccw_label.setStyleSheet(self._get_label_style(color, is_circle=True))
+
+        # CW
+        name = shorten_keycode_name(get_keycode_name(cw_keycode), 8)
+        self.enc_cw_label.setText(f"CW\n{name}")
+        color = self._get_keycode_color(cw_keycode)
+        self.enc_cw_label.setStyleSheet(self._get_label_style(color, is_circle=True))
 
     def clear(self):
         """Clear all key labels."""

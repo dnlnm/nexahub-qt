@@ -21,7 +21,7 @@ class HIDSignalBridge(QObject):
     """Bridge to handle HID events in the GUI thread."""
 
     layer_event = Signal(int)
-    keymap_event = Signal(list)
+    keymap_event = Signal(list, object)  # keycodes, encoder_keycodes (tuple)
     key_press_event = Signal(int, int, bool)  # row, col, pressed
     window_event = Signal(str, object)
 
@@ -191,14 +191,14 @@ class NexaHubApp:
             # Log/debug
             print(f"Device switched to layer: {layer_id}")
 
-    def _on_keymap_event(self, keycodes: list):
+    def _on_keymap_event(self, keycodes: list, encoder_keycodes: tuple):
         """Handle keymap update event on GUI thread."""
-        if keycodes != self._cached_keycodes:
-            self._cached_keycodes = keycodes
+        # Update always if we have new data
+        self._cached_keycodes = keycodes
 
-            # Update overlay if visible
-            if self.overlay_window.isVisible():
-                self.overlay_window.update_keymap(keycodes)
+        # Update overlay if visible
+        if self.overlay_window.isVisible():
+            self.overlay_window.update_keymap(keycodes, encoder_keycodes)
 
     def _on_key_press_event(self, row: int, col: int, pressed: bool):
         """Handle key press/release event on GUI thread."""
@@ -213,8 +213,9 @@ class NexaHubApp:
 
         # Fetch keycodes for current layer
         keycodes = self.hid.get_layer_keycodes(self.current_layer)
+        encoder_keycodes = self.hid.get_encoder_keycodes(self.current_layer, 0)
         if keycodes:
-            self.hid_bridge.keymap_event.emit(keycodes)
+            self.hid_bridge.keymap_event.emit(keycodes, encoder_keycodes)
 
     def _on_window_changed(self, process_name: str, window_title: Optional[str]):
         """Handle window change event."""

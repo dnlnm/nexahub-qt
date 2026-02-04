@@ -57,13 +57,13 @@ class OverlayWindow(QWidget):
         # Prevent the overlay from taking focus when shown
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
-        # Initialize UI
-        self._setup_ui()
-
         # Dragging state
         self.dragging = False
         self.offset = QPoint()
         self._click_through_enabled = False
+
+        # Initialize UI
+        self._setup_ui()
 
         # Set initial position (top-right corner by default)
         self._set_initial_position()
@@ -83,8 +83,8 @@ class OverlayWindow(QWidget):
         self.container.setObjectName("container")
         self.container.setStyleSheet("""
             QWidget#container {
-                background-color: rgba(30, 30, 30, 200);
-                border: 1px solid rgba(100, 100, 100, 150);
+                background-color: rgba(30, 30, 30, 160);
+                border: 1px solid rgba(100, 100, 100, 100);
                 border-radius: 10px;
             }
         """)
@@ -95,17 +95,12 @@ class OverlayWindow(QWidget):
         # Force the container to always shrink/grow to fit its contents
         container_layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetFixedSize)
 
-        # Label for "LAYER"
-        self.title_label = QLabel("LAYER")
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title_label.setStyleSheet("""
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 10px;
-            font-weight: bold;
-            color: #aaaaaa;
-            letter-spacing: 1px;
-        """)
-        container_layout.addWidget(self.title_label)
+        # Button for "NEXAPAD" (acting as toggle)
+        self.title_label = QPushButton("NEXAPAD ▼")
+        self.title_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._update_title_style(self._click_through_enabled)
+        self.title_label.clicked.connect(self._toggle_keymap)
+        container_layout.addWidget(self.title_label, 0, Qt.AlignmentFlag.AlignCenter)
 
         # Label for Layer ID
         self.layer_label = QLabel("0")
@@ -117,25 +112,6 @@ class OverlayWindow(QWidget):
             color: #ffffff;
         """)
         container_layout.addWidget(self.layer_label)
-
-        # Toggle button for keymap
-        self.toggle_keymap_btn = QPushButton("▼ Keymap")
-        self.toggle_keymap_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                color: #888888;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: 9px;
-                padding: 2px;
-            }
-            QPushButton:hover {
-                color: #aaaaaa;
-            }
-        """)
-        self.toggle_keymap_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.toggle_keymap_btn.clicked.connect(self._toggle_keymap)
-        container_layout.addWidget(self.toggle_keymap_btn)
 
         # Keymap grid (initially visible)
         self.keymap_grid = KeymapGrid()
@@ -182,18 +158,26 @@ class OverlayWindow(QWidget):
         
         if self.keymap_grid.isVisible():
             self.keymap_grid.hide()
-            self.toggle_keymap_btn.setText("▶ Keymap")
+            self.title_label.setText("NEXAPAD ▶")
         else:
             self.keymap_grid.show()
-            self.toggle_keymap_btn.setText("▼ Keymap")
+            self.title_label.setText("NEXAPAD ▼")
         
         # Apply resize anchored to the pre-change position
         self.adjustSize(anchor=anchor)
 
-    def update_keymap(self, keycodes: list):
+    def update_keymap(self, keycodes: list, encoder_keycodes: tuple = None):
         """Update the displayed keymap."""
         anchor = self.geometry().bottomRight()
+        changed = False
         if self.keymap_grid.update_keycodes(keycodes):
+            changed = True
+        
+        if encoder_keycodes:
+            self.keymap_grid.update_encoder(encoder_keycodes[0], encoder_keycodes[1])
+            changed = True  # Assuming update_encoder updates UI labels
+
+        if changed:
             self.adjustSize(anchor=anchor)
 
     def update_key_press(self, row: int, col: int, pressed: bool):
@@ -218,6 +202,28 @@ class OverlayWindow(QWidget):
         self.layer_label.setText(str(layer_id))
         self.adjustSize(anchor=anchor)
 
+    def _update_title_style(self, click_through: bool):
+        """Update the title label style based on click-through state."""
+        # Red when click-through (pass-through), Green when interactive
+        if click_through:
+            bg_color = "rgba(217, 83, 79, 90)"  # Red
+            text_color = "#ffffff"
+        else:
+            bg_color = "rgba(92, 184, 92, 90)"  # Green
+            text_color = "#ffffff"
+
+        self.title_label.setStyleSheet(f"""
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 10px;
+            font-weight: bold;
+            color: {text_color};
+            letter-spacing: 1px;
+            background-color: {bg_color};
+            border-radius: 4px;
+            padding: 2px 6px;
+            border: none;
+        """)
+
     def set_click_through(self, enabled: bool):
         """Enable or disable click-through mode using Win32 API.
 
@@ -225,6 +231,7 @@ class OverlayWindow(QWidget):
         When disabled, the window can be dragged.
         """
         self._click_through_enabled = enabled
+        self._update_title_style(enabled)
 
         if not user32:
             return
