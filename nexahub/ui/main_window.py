@@ -54,32 +54,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central_widget)
         layout.setSpacing(15)
 
-        # General Settings Group
-        general_group = QGroupBox("General Settings")
-        general_layout = QVBoxLayout(general_group)
-
-        # Auto-start checkbox
-        self.auto_start_checkbox = QCheckBox("Start NexaHub on Windows startup")
-        general_layout.addWidget(self.auto_start_checkbox)
-
-        # Minimize to tray checkbox
-        self.minimize_checkbox = QCheckBox("Close to system tray")
-        general_layout.addWidget(self.minimize_checkbox)
-
-        # Import/Export buttons
-        config_buttons_layout = QHBoxLayout()
-
-        self.import_button = QPushButton("Import Config")
-        self.import_button.clicked.connect(self._import_settings)
-        config_buttons_layout.addWidget(self.import_button)
-
-        self.export_button = QPushButton("Export Config")
-        self.export_button.clicked.connect(self._export_settings)
-        config_buttons_layout.addWidget(self.export_button)
-
-        general_layout.addLayout(config_buttons_layout)
-
-        layout.addWidget(general_group)
+        # Status bar
+        self.status_label = QLabel("Status: Not connected")
+        layout.addWidget(self.status_label)
 
         # Device Settings Group
         device_group = QGroupBox("Device Settings")
@@ -162,16 +139,43 @@ class MainWindow(QMainWindow):
         button_layout.addStretch()
         mappings_layout.addLayout(button_layout)
 
-        layout.addWidget(mappings_group)
-
-        # Status bar
-        self.status_label = QLabel("Status: Not connected")
-        layout.addWidget(self.status_label)
-
         # Window info display
         self.window_info_label = QLabel("Active: N/A | Title: N/A")
         self.window_info_label.setStyleSheet("color: gray; font-size: 11px;")
-        layout.addWidget(self.window_info_label)
+        mappings_layout.addWidget(self.window_info_label)
+
+        layout.addWidget(mappings_group)
+
+        # General Settings Group
+        general_group = QGroupBox("General Settings")
+        general_layout = QVBoxLayout(general_group)
+
+        # Auto-start checkbox
+        self.auto_start_checkbox = QCheckBox("Start NexaHub on Windows startup")
+        general_layout.addWidget(self.auto_start_checkbox)
+
+        # Minimize to tray checkbox
+        self.minimize_checkbox = QCheckBox("Close to system tray")
+        general_layout.addWidget(self.minimize_checkbox)
+
+        # Import/Export buttons
+        config_buttons_layout = QHBoxLayout()
+
+        self.import_button = QPushButton("Import Config")
+        self.import_button.clicked.connect(self._import_settings)
+        config_buttons_layout.addWidget(self.import_button)
+
+        self.export_button = QPushButton("Export Config")
+        self.export_button.clicked.connect(self._export_settings)
+        config_buttons_layout.addWidget(self.export_button)
+
+        general_layout.addLayout(config_buttons_layout)
+
+        layout.addWidget(general_group)
+
+
+
+
 
         # Save/Cancel buttons
         action_layout = QHBoxLayout()

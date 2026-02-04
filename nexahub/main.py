@@ -61,8 +61,6 @@ class NexaHubApp:
 
         self._setup_connections()
         self._setup_timers()
-        self._connect_to_device()
-
         # Setup HID bridge
         self.hid_bridge = HIDSignalBridge()
         self.hid_bridge.layer_event.connect(self._on_layer_event)
@@ -72,6 +70,9 @@ class NexaHubApp:
 
         # Register HID callback
         self.hid.register_callback(self._on_hid_data)
+
+        # Connect to device after setting up signals and callbacks
+        self._connect_to_device()
 
     def _setup_connections(self):
         """Setup signal connections."""
@@ -134,6 +135,8 @@ class NexaHubApp:
                 self.tray_icon.show_notification("NexaHub", "Connected to QMK keyboard")
                 self._start_window_monitoring()
                 self._apply_current_settings()
+                # Fetch initial layer immediately to update UI
+                self.hid.get_current_layer()
             else:
                 # Pass error message to UI
                 error_msg = self.hid.last_error[:50] if self.hid.last_error else ""
